@@ -19,6 +19,7 @@
 #include "BTCCollider.h"
 #include "SECP256k1.h"
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <string.h>
 #include <stdexcept>
@@ -108,7 +109,14 @@ void getInts(string name,vector<int> &tokens, const string &text, char sep) {
 // ------------------------------------------------------------------------------------------
 
 int main(int argc, char* argv[]) {
+   BTCCollider collider(secp, useGpu, stop, outputFile, workFile, iWorkFile, savePeriod, n, dp, extraPoints);
 
+    if (checkFlag) {
+        collider.Check(gpuId, gridSize);
+    } else {
+        collider.Search(nbCPUThread, gpuId, gridSize);
+    }
+  
   // Global Init
   Timer::Init();
   rseed((unsigned long)time(NULL));
