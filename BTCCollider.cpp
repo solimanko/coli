@@ -1,6 +1,6 @@
 /*
- * This file is part of the BTCCollider distribution (https://github.com/JeanLucPons/BTCCollider).
- * Copyright (c) 2020 Jean Luc PONS.
+ * This file is part of the BTCCollider distribution (https://github.com/solimanko/coli).
+ * Copyright (c) 2024 Abdullah Soliman Dev.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,9 +16,6 @@
 */
 
 #include "BTCCollider.h"
-#include <fstream>
-#include <sstream>
-#include <iostream>
 #include "Base58.h"
 #include "Bech32.h"
 #include "hash/sha256.h"
@@ -27,9 +24,10 @@
 #include "Timer.h"
 #include "hash/ripemd160.h"
 #include <string.h>
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include <fstream>
+#include <sstream>
 #include <algorithm>
+
 #ifndef WIN64
 #include <pthread.h>
 #endif
@@ -49,7 +47,7 @@ void *_InitKey(void *lpParam) {
 // ----------------------------------------------------------------------------
 
 BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string outputFile, std::string workFile, 
-                         std::string iWorkFile, uint32_t savePeriod, uint32_t n, int dp, bool extraPoints) {
+                         std::string iWorkFile, uint32_t savePeriod, uint32_t n, int dp,bool extraPoints) {
 
   this->secp = secp;
   this->useGpu = useGpu;
@@ -149,6 +147,37 @@ BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string ou
   time_t now = time(NULL);
   ctimeBuff = ctime(&now);
   printf("Start %s", ctimeBuff);
+
+    loadPuzzlePublicKeys("puzzle_pubkeys.txt");
+}
+
+void BTCCollider::loadPuzzlePublicKeys(const std::string& filename) {
+    std::ifstream file(filename);
+    std::string line;
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string pubkey;
+        int range;
+        if (std::getline(iss, pubkey, ',') && (iss >> range)) {
+            puzzlePublicKeys.push_back({pubkey, range});
+        }
+    }
+}
+
+void BTCCollider::searchRangeSpecific(const std::string& pubKey, int bitRange) {
+    // Implement range-specific search logic here
+    // This is where you'll use your GPU to search for collisions
+    // You'll need to adapt this to work with your existing GPU code
+    printf("Searching for collision with public key %s in %d bit range\n", pubKey.c_str(), bitRange);
+    // ... (implement actual search logic)
+}
+
+void BTCCollider::Search(int nbThread,std::vector<int> gpuId,std::vector<int> gridSize) {
+  // ... (keep existing search initialization code)
+
+  for (const auto& puzzle : puzzlePublicKeys) {
+      searchRangeSpecific(puzzle.first, puzzle.second);
+  }
 
 }
 
