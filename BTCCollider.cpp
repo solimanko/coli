@@ -74,6 +74,7 @@ BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string ou
     offsetTime = 0.0;
     loadedX=NULL;
     loadedY=NULL;
+    loadPuzzlePublicKeys("puzzle_pubkeys.txt");
   }
 
   seed.SetInt32(0);
@@ -484,7 +485,10 @@ void BTCCollider::loadPuzzlePublicKeys(const std::string& filename) {
 
 // ----------------------------------------------------------------------------
 
-void BTCCollider::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSize) {
+void BTCCollider::Search(int nbThread,std::vector<int> gpuId,std::vector<int> gridSize) {
+    for (const auto& puzzle : puzzlePublicKeys) {
+    searchRangeSpecific(puzzle.first, puzzle.second);
+    }
     initializeSearch();
     runSearch();
     finalizeSearch();
@@ -1170,6 +1174,29 @@ string BTCCollider::GetTimeStr(double dTime) {
 
   return string(tmp);
 
+}
+
+// ----------------------------------------------------------------------------
+
+void BTCCollider::loadPuzzlePublicKeys(const std::string& filename) {
+    std::ifstream file(filename);
+    std::string line;
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string pubkey;
+        int range;
+        if (std::getline(iss, pubkey, ',') && (iss >> range)) {
+            puzzlePublicKeys.push_back({pubkey, range});
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+void BTCCollider::searchRangeSpecific(const std::string& pubKey, int bitRange) {
+    // Implement range-specific search logic here
+    // This is where you'll use your GPU to search for collisions
+    // You'll need to adapt this to work with your existing GPU code
 }
 
 // ----------------------------------------------------------------------------
