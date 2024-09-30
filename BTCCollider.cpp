@@ -24,9 +24,11 @@
 #include "Timer.h"
 #include "hash/ripemd160.h"
 #include <string.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
-#include <algorithm>
 
 #ifndef WIN64
 #include <pthread.h>
@@ -48,7 +50,6 @@ void *_InitKey(void *lpParam) {
 
 BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string outputFile, std::string workFile, 
                          std::string iWorkFile, uint32_t savePeriod, uint32_t n, int dp,bool extraPoints) {
-
   this->secp = secp;
   this->useGpu = useGpu;
   this->outputFile = outputFile;
@@ -72,7 +73,6 @@ BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string ou
     offsetTime = 0.0;
     loadedX=NULL;
     loadedY=NULL;
-    loadPuzzlePublicKeys("puzzle_pubkeys.txt");
   }
 
   seed.SetInt32(0);
@@ -92,12 +92,10 @@ BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string ou
 
   TH_PARAM params[10];
   memset(params, 0, sizeof(params));
-
   printf("Initializing:");
 #ifndef WIN64
   fflush(stdout);
 #endif
-
   Point GP = secp->G;
   Int KP;
   KP.SetInt32(1);
@@ -122,6 +120,7 @@ BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string ou
     Rand(&seed,&params[i].localSeed);
     threadIDs[i] = LaunchThread(_InitKey,params+i);
   }
+
   JoinThreads(threadIDs,10);
   FreeHandles(threadIDs,10);
   printf("Done\n");
@@ -135,7 +134,6 @@ BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string ou
 #else
   colMask = __builtin_bswap16(colMask);
 #endif
-
   hashTable.SetParam(colSize,nbFull,colMask);
   
   beta1.SetBase16("7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee");
@@ -147,44 +145,11 @@ BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string ou
   time_t now = time(NULL);
   ctimeBuff = ctime(&now);
   printf("Start %s", ctimeBuff);
-
-    loadPuzzlePublicKeys("puzzle_pubkeys.txt");
-}
-
-void BTCCollider::loadPuzzlePublicKeys(const std::string& filename) {
-    std::ifstream file(filename);
-    std::string line;
-    while (std::getline(file, line)) {
-        std::istringstream iss(line);
-        std::string pubkey;
-        int range;
-        if (std::getline(iss, pubkey, ',') && (iss >> range)) {
-            puzzlePublicKeys.push_back({pubkey, range});
-        }
-    }
-}
-
-void BTCCollider::searchRangeSpecific(const std::string& pubKey, int bitRange) {
-    // Implement range-specific search logic here
-    // This is where you'll use your GPU to search for collisions
-    // You'll need to adapt this to work with your existing GPU code
-    printf("Searching for collision with public key %s in %d bit range\n", pubKey.c_str(), bitRange);
-    // ... (implement actual search logic)
-}
-
-void BTCCollider::Search(int nbThread,std::vector<int> gpuId,std::vector<int> gridSize) {
-  // ... (keep existing search initialization code)
-
-  for (const auto& puzzle : puzzlePublicKeys) {
-      searchRangeSpecific(puzzle.first, puzzle.second);
-  }
-
 }
 
 // ----------------------------------------------------------------------------
 
 void BTCCollider::LoadWork(string fileName) {
-
   FILE *f = fopen(fileName.c_str(), "rb");
   if (f == NULL) {
     printf("LoadWork: Cannot open %s for reading\n", fileName.c_str());
@@ -210,7 +175,6 @@ void BTCCollider::LoadWork(string fileName) {
     printf("LoadWork: Failed to allocate memory !\n");
     exit(-1);
   }
-
   for (uint64_t n = 0; n < nbLoadedWalk; n++) {
     fread(&loadedX[n], sizeof(hash160_t), 1, f);
     fread(&loadedY[n], sizeof(hash160_t), 1, f);
@@ -228,13 +192,11 @@ void BTCCollider::LoadWork(string fileName) {
   sha256((uint8_t *)newSeed.c_str(), (int)newSeed.length(), (uint8_t *)seed.bits64);
 
   printf("LoadWork: %s ok [2^%.2f walks]\n", fileName.c_str(), log2((double)nbLoadedWalk));
-
 }
 
 // ----------------------------------------------------------------------------
 
 void BTCCollider::SaveWork(uint64_t totalCount, double totalTime, TH_PARAM *threads, int nbThread) {
-
   FILE *f = fopen(workFile.c_str(), "wb");
   if (f == NULL) {
     printf("SaveWork: Cannot open %s for writing\n", workFile.c_str());
@@ -260,8 +222,8 @@ void BTCCollider::SaveWork(uint64_t totalCount, double totalTime, TH_PARAM *thre
   uint64_t totalWalk = 0;
   for (int i = 0; i < nbThread; i++)
     totalWalk += threads[i].nbWalk;
-  fwrite(&totalWalk, sizeof(uint64_t), 1, f);
 
+  fwrite(&totalWalk, sizeof(uint64_t), 1, f);
   for (int i = 0; i < nbThread; i++) {
     for (uint64_t n = 0; n < threads[i].nbWalk; n++) {
       fwrite(&threads[i].x[n], sizeof(hash160_t), 1, f);
@@ -271,7 +233,6 @@ void BTCCollider::SaveWork(uint64_t totalCount, double totalTime, TH_PARAM *thre
 
   // Save hash table
   hashTable.SaveTable(f);
-
   fclose(f);
 
   // Unblock threads
@@ -282,13 +243,11 @@ void BTCCollider::SaveWork(uint64_t totalCount, double totalTime, TH_PARAM *thre
   time_t now = time(NULL);
   ctimeBuff = ctime(&now);
   printf("\nWork saved: %s", ctimeBuff);
-
 }
 
 // ----------------------------------------------------------------------------
 
 void BTCCollider::FetchWalks(hash160_t *x, hash160_t *y, uint64_t nbWalk) {
-
   for (int n = 0; n < nbWalk; n++) {
     if (fetchedWalk < nbLoadedWalk) {
       // Fecth a loaded walk
@@ -301,13 +260,11 @@ void BTCCollider::FetchWalks(hash160_t *x, hash160_t *y, uint64_t nbWalk) {
       y[n] = x[n];
     }
   }
-
 }
 
 // ----------------------------------------------------------------------------
 
 void BTCCollider::Check(std::vector<int> gpuId, std::vector<int> gridSize) {
-
   if(initDPSize<0)
     initDPSize = colSize/3;
   SetDP(initDPSize);
@@ -318,7 +275,6 @@ void BTCCollider::Check(std::vector<int> gpuId, std::vector<int> gridSize) {
   // Check SSE and CPU group
   hash160_t *x = new hash160_t[CPU_GRP_SIZE];
   hash160_t *xc = new hash160_t[CPU_GRP_SIZE];
-
   for (int i = 0; i < CPU_GRP_SIZE; i++) {
     Rand(&seed, &x[i]);
     xc[i] = x[i];
@@ -351,38 +307,31 @@ void BTCCollider::Check(std::vector<int> gpuId, std::vector<int> gridSize) {
 #ifdef WITHGPU
   // Check gpu
   if (useGpu) {
-
     printf("GPU allocate memory:");
     int x = gridSize[0];
     int y = gridSize[1];
     if (!GPUEngine::GetGridSize(gpuId[0], &x, &y)) {
       return;
     }
-
     GPUEngine h(x,y, gpuId[0], 65536);
     printf(" done\n");
     printf("GPU: %s\n", h.deviceName.c_str());
     printf("GPU: %.1f MB\n", h.GetMemory()/1048576.0);
-
     int nbH = h.GetNbThread() * GPU_GRP_SIZE;
     hash160_t *iHash = (hash160_t *)malloc(nbH *sizeof(hash160_t));
     for(int i=0;i<nbH;i++)
       Rand(&seed, &iHash[i]);
-
     h.SetExtraPoint(extraPoints);
     h.SetMasks(colMask,dMask,nbFull);
-
     printf("GPU SetKeys:");
     h.SetKeys(pub);
     printf(" done\n");
-
     printf("GPU SetStartingHashes:");
     if (!h.SetStartingHashes((uint64_t *)iHash, (uint64_t *)iHash)) {
       printf(" failed !");
       return;
     }
     printf(" done\n");
-
     HashTable *h1 = new HashTable();
     HashTable *h2 = new HashTable();
     h1->SetParam(colSize,nbFull,colMask);
@@ -393,1144 +342,548 @@ void BTCCollider::Check(std::vector<int> gpuId, std::vector<int> gridSize) {
     for (int i = 0; i < (int)hashFound.size(); i++)
       h1->AddHash((hash160_t *)(hashFound[i].h1), (hash160_t *)(hashFound[i].h2));
     printf("GPU found %d items\n", h1->GetNbItem());
-
-    int nbF=0;
-    hash160_t *sHash = (hash160_t *)malloc(nbH * sizeof(hash160_t));
-    memcpy(sHash,iHash, nbH * sizeof(hash160_t));
-    for (int run = 0; run < NB_RUN; run++) {
-      for (int i = 0; i < nbH; i++) {
-        iHash[i] = F(iHash[i]);
-        if (IsDP(iHash[i])) {
-          nbF++;
-          h2->AddHash(&sHash[i],&iHash[i]);
-          sHash[i] = iHash[i];
-        }
+    int nb
+    int nbCPU = 0;
+    hash160_t *h = (hash160_t *)malloc(nbH * sizeof(hash160_t));
+    hash160_t *hc = (hash160_t *)malloc(nbH * sizeof(hash160_t));
+    for (int i = 0; i < nbH; i++) {
+      h[i] = iHash[i];
+      hc[i] = iHash[i];
+    }
+    for (int i = 0; i < nbH; i++) {
+      hc[i] = F(hc[i]);
+      if (hashTable.compareHash(&h[i], &hc[i]) == 0) {
+        h2->AddHash(&h[i], &hc[i]);
+        nbCPU++;
       }
-      printf("CPU R%d found %d items\n", run, h2->GetNbItem());
+    }
+    printf("CPU found %d items\n", nbCPU);
+
+    if (nbCPU != h1->GetNbItem()) {
+      printf("CPU/GPU differs !\n");
+    } else {
+      int nb = h1->GetNbItem();
+      bool ok = true;
+      int i = 0;
+      while (ok && i < nb) {
+        vector<Int> hashesGPU = h1->GetItemsInt(i);
+        vector<Int> hashesCPU = h2->GetItemsInt(i);
+        ok = (hashesGPU[0].IsEqual(&hashesCPU[0]) && hashesGPU[1].IsEqual(&hashesCPU[1]));
+        i++;
+      }
+      if (!ok) {
+        printf("CPU/GPU differs !\n");
+      } else {
+        printf("CPU/GPU OK\n");
+      }
     }
 
-    if( !h1->compare(h2) )
-      return;
-
-    printf("GPU/CPU ok\n");
-
+    delete h1;
+    delete h2;
+    free(h);
+    free(hc);
+    free(iHash);
   }
 #endif
 
-}
-
-// ----------------------------------------------------------------------------
-#ifdef WIN64
-
-THREAD_HANDLE BTCCollider::LaunchThread(LPTHREAD_START_ROUTINE func, TH_PARAM *p) {
-  p->obj = this;
-  return CreateThread(NULL, 0, func, (void*)(p), 0, NULL);
-}
-void  BTCCollider::JoinThreads(THREAD_HANDLE *handles,int nbThread) {
-  WaitForMultipleObjects(nbThread, handles, TRUE, INFINITE);
-}
-void  BTCCollider::FreeHandles(THREAD_HANDLE *handles, int nbThread) {
-  for (int i = 0; i < nbThread; i++)
-    CloseHandle(handles[i]);
-}
-#else
-
-THREAD_HANDLE BTCCollider::LaunchThread(void *(*func) (void *), TH_PARAM *p) {
-  THREAD_HANDLE h;
-  p->obj = this;
-  pthread_create(&h, NULL, func, (void*)(p));
-  return h;
-}
-void  BTCCollider::JoinThreads(THREAD_HANDLE *handles, int nbThread) {
-  for (int i = 0; i < nbThread; i++)
-    pthread_join(handles[i], NULL);
-}
-void  BTCCollider::FreeHandles(THREAD_HANDLE *handles, int nbThread) {
-}
-#endif
-
-// ----------------------------------------------------------------------------
-
-void BTCCollider::SetDP(int size) {
-
-  // Mask for distinguised point
-  dpSize = size;
-  if (dpSize == 0) {
-    dMask = 0;
-  } else {
-    if (dpSize > 64) dpSize = 64;
-    dMask = (1ULL << (64 - dpSize)) - 1;
-    dMask = ~dMask;
-  }
-
-#ifdef WIN64
-  printf("DP size: %d [0x%016I64X]\n", dpSize, dMask);
-#else
-  printf("DP size: %d [0x%" PRIx64 "]\n", dpSize, dMask);
-#endif
-
-  dMask = _byteswap_uint64(dMask);
-
+  delete[] x;
+  delete[] xc;
+  delete grp;
+  delete[] pts;
+  delete[] dInv;
 }
 
 // ----------------------------------------------------------------------------
 
 void BTCCollider::InitKey(TH_PARAM *p) {
-
   Int k;
-  Rand(&p->localSeed, &k);
-  Point sp = secp->ComputePublicKey(&k);
-  int id = p->threadId;
-  PUBX(id, 0).Set(&sp.x);
-  PUBY(id, 0).Set(&sp.y);
-  priv[id][0].Set(&k);
-  for (int j = 1; j < 65536; j++) {
-    k.ModAddK1order(&k,&Kp[id]);
-    sp = secp->AddDirect(sp,Gp[id]);
-    PUBX(id, j).Set(&sp.x);
-    PUBY(id, j).Set(&sp.y);
-    priv[id][j].Set(&k);
+  Point key;
+  int i = p->threadId;
+  for (int j = 0; j < 65536; j++) {
+    Rand(&p->localSeed, &k);
+    key = secp->ComputePublicKey(&k);
+    pub[i * 131072 + j * 2] = key.x;
+    pub[i * 131072 + j * 2 + 1] = key.y;
+    if ((j % 8192) == 0) {
+      printf(".");
+#ifndef WIN64
+      fflush(stdout);
+#endif
+    }
+  }
+}
+
+// ----------------------------------------------------------------------------
+
+void BTCCollider::SetDP(int size) {
+  dpSize = size;
+  dMask = 0xFFFFFFFFFFFFFFFFULL;
+  dMask = dMask >> (64 - dpSize);
+}
+
+// ----------------------------------------------------------------------------
+
+void BTCCollider::Run(int nbThread) {
+  double t0;
+  double t1;
+  uint64_t count;
+  uint64_t lastCount;
+  uint64_t nbFoundCollision;
+  vector<ITEM> hashFound;
+  vector<ITEM> hashFound2;
+
+  TH_PARAM *params = (TH_PARAM *)malloc(nbThread * sizeof(TH_PARAM));
+  THREAD_HANDLE *thHandles = (THREAD_HANDLE *)malloc(nbThread * sizeof(THREAD_HANDLE));
+
+  memset(params, 0, nbThread * sizeof(TH_PARAM));
+
+  printf("Number of CPU thread: %d\n", nbThread);
+
+  // Set starting parameters
+  for (int i = 0; i < nbThread; i++) {
+    params[i].obj = this;
+    params[i].threadId = i;
+    params[i].isRunning = true;
+    params[i].nbit = 0;
+    params[i].hStart = (hash160_t *)malloc(CPU_GRP_SIZE * sizeof(hash160_t));
+    params[i].hStop = (hash160_t *)malloc(CPU_GRP_SIZE * sizeof(hash160_t));
+    params[i].x = (hash160_t *)malloc(CPU_GRP_SIZE * sizeof(hash160_t));
+    params[i].y = (hash160_t *)malloc(CPU_GRP_SIZE * sizeof(hash160_t));
+    params[i].nbWalk = 0;
+    params[i].maxWalk = CPU_GRP_SIZE;
+    FetchWalks(params[i].x, params[i].y, params[i].maxWalk);
+    params[i].nbWalk = params[i].maxWalk;
   }
 
-}
+  // Launch CPU threads
+  for (int i = 0; i < nbThread; i++)
+    thHandles[i] = LaunchThread(_FindCollision, params + i);
 
-// ----------------------------------------------------------------------------
-
-    loadPuzzlePublicKeys("puzzle_pubkeys.txt");
-}
-
-void BTCCollider::loadPuzzlePublicKeys(const std::string& filename) {
-    std::ifstream file(filename);
-    std::string line;
-    while (std::getline(file, line)) {
-        std::istringstream iss(line);
-        std::string pubkey;
-        int range;
-        if (std::getline(iss, pubkey, ',') && (iss >> range)) {
-            puzzlePublicKeys.push_back({pubkey, range});
-        }
+#ifdef WITHGPU
+  // Launch GPU
+  if (useGpu) {
+    int x = gridSize[0];
+    int y = gridSize[1];
+    if (!GPUEngine::GetGridSize(gpuId[0], &x, &y)) {
+      return;
     }
-}
+    GPUEngine *g = new GPUEngine(x, y, gpuId[0], 65536);
+    g->SetExtraPoint(extraPoints);
+    g->SetMasks(colMask, dMask, nbFull);
+    g->SetKeys(pub);
+    nbGPUThread = g->GetNbThread();
+    printf("GPU: %s\n", g->deviceName.c_str());
+    printf("GPU: %.1f MB\n", g->GetMemory() / 1048576.0);
+    printf("GPU: %d threads\n", nbGPUThread);
+  }
+#endif
 
-// ----------------------------------------------------------------------------
+  // Key rate smoothing filter
+  #define FILTER_SIZE 8
+  double lastkeyRate[FILTER_SIZE];
+  double lastGpukeyRate[FILTER_SIZE];
+  uint32_t filterPos = 0;
 
-void BTCCollider::Search(int nbThread,std::vector<int> gpuId,std::vector<int> gridSize) {
-    for (const auto& puzzle : puzzlePublicKeys) {
-    searchRangeSpecific(puzzle.first, puzzle.second);
-    }
-    initializeSearch();
-    runSearch();
-    finalizeSearch();
-}
+  double keyRate = 0.0;
+  double gpuKeyRate = 0.0;
+  char timeStr[256];
 
-// ----------------------------------------------------------------------------
-
-void BTCCollider::initializeSearch() {
-    // Initialize search parameters, allocate resources, etc.
-    // ... (implement initialization logic)
-}
-
-// ----------------------------------------------------------------------------
-
-void BTCCollider::runSearch() {
-    for (const auto& puzzle : puzzlePublicKeys) {
-        searchRangeSpecific(puzzle);
-    }
-}
-
-// ----------------------------------------------------------------------------
-
-void BTCCollider::Rand(Int *seed, Int *i) {
-  seed->AddOne();
-  sha256((uint8_t *)seed->bits64,32,(uint8_t *)i->bits64);
-  i->bits64[4] = 0;
-}
-
-void BTCCollider::Rand(Int *seed, hash160_t *i) {
-  seed->AddOne();
-  uint8_t digest[32];
-  sha256((uint8_t *)seed->bits64, 32, digest);
-  memcpy(i->i8,digest,20);
-}
-
-// ----------------------------------------------------------------------------
-
-Int BTCCollider::GetPrivKey(hash160_t x) {
-
-  Int k = priv[0][x.i16[0]];
-
-  int i;
-  for (i = 1; i < nbFull; i++)
-    k.ModAddK1order(&k,&priv[i][x.i16[i]]);
-
-  if (colMask)
-    k.ModAddK1order(&k, &priv[i][x.i16[i] & colMask]);
-
-  if (extraPoints) {
-
-    hash160_t h;
-    Int e1;
-    Int e2;
-    Point p = secp->ComputePublicKey(&k);
-    bool yOdd = p.y.IsOdd();
-
-    secp->GetCompressedHash160(P2PKH, &p.x, yOdd, h.i8);
-    if(HASHOK(h)) return k;
-    secp->GetCompressedHash160(P2PKH, &p.x, !yOdd, h.i8);
-    if (HASHOK(h)) {
-      k.Neg();
-      k.Add(&secp->order);
-      return k;
-    }
-
-    e1.ModMulK1(&p.x,&beta1);
-    secp->GetCompressedHash160(P2PKH, &e1, yOdd, h.i8);
-    if (HASHOK(h)) {
-      k.ModMulK1order(&lambda1);
-      return k;
-    }
-    secp->GetCompressedHash160(P2PKH, &e1, !yOdd, h.i8);
-    if (HASHOK(h)) {
-      k.ModMulK1order(&lambda1);
-      k.Neg();
-      k.Add(&secp->order);
-      return k;
-    }
-
-    e2.ModMulK1(&p.x, &beta2);
-    secp->GetCompressedHash160(P2PKH, &e2, yOdd, h.i8);
-    if (HASHOK(h)) {
-      k.ModMulK1order(&lambda2);
-      return k;
-    }
-    secp->GetCompressedHash160(P2PKH, &e2, !yOdd, h.i8);
-    if (HASHOK(h)) {
-      k.ModMulK1order(&lambda2);
-      k.Neg();
-      k.Add(&secp->order);
-      return k;
-    }
-
+  // Wait that all threads have started
+  while (!isReady(params)) {
+    Timer::SleepMillis(500);
   }
 
-  return k;
+  // Reset timer
+  Timer::Init();
+  t0 = Timer::get_tick();
+  t1 = t0;
+  lastCount = 0;
+  nbFoundCollision = 0;
 
+  while (isAlive(params)) {
+    int delay = 2000;
+    while (isAlive(params) && delay > 0) {
+      Timer::SleepMillis(500);
+      delay -= 500;
+    }
+
+    count = getGlobalCount();
+    uint64_t totalCount = count + offsetCount;
+    double t2 = Timer::get_tick();
+    double keyRate = (double)(count - lastCount) / (t2 - t1);
+    double totalKeyRate = (double)(totalCount) / (t2 - t0 + offsetTime);
+
+    memcpy(lastkeyRate, lastkeyRate + 1, (FILTER_SIZE - 1) * sizeof(double));
+    lastkeyRate[FILTER_SIZE - 1] = keyRate;
+    if (filterPos == FILTER_SIZE) {
+      double avgKeyRate = 0.0;
+      for (int i = 0; i < FILTER_SIZE; i++)
+        avgKeyRate += lastkeyRate[i];
+      avgKeyRate /= (double)(FILTER_SIZE);
+      char *crs = "\n";
+      if (rekey > 0) {
+        crs = "";
+      }
+      printf("%s[%.2f Mkey/s][%.2f Mkey/s][2^%.2f][%s][%s]%s",
+             crs,
+             avgKeyRate / 1000000.0,
+             totalKeyRate / 1000000.0,
+             log2((double)totalCount),
+             GetTimeStr(t2 - t0 + offsetTime).c_str(),
+             hashTable.GetSizeInfo().c_str(),
+             crs);
+    } else {
+      filterPos++;
+    }
+
+    if (saveWorkPeriod > 0) {
+      if ((count % saveWorkPeriod) == 0) {
+        SaveWork(totalCount, t2 - t0 + offsetTime, params, nbThread);
+      }
+    }
+
+    lastCount = count;
+    t1 = t2;
+  }
+
+  free(params);
+  free(thHandles);
 }
 
 // ----------------------------------------------------------------------------
 
-void  BTCCollider::AddGroup(IntGroup *grp, hash160_t *x, Point *p1, Int *dx, int i,uint16_t colMask) {
+void BTCCollider::FindCollision(TH_PARAM *p) {
+  // Global init
+  TH_PARAM *params = (TH_PARAM *)p;
+  int nbThread = params->nbThread;
+  int thl = params->threadId;
+  counters[thl] = 0;
 
-  // Affine coord
+  // CPU Thread
+  IntGroup *grp = new IntGroup(CPU_GRP_SIZE);
+  Point *pts = new Point[CPU_GRP_SIZE];
+  Int *dInv = new Int[CPU_GRP_SIZE];
+
+  // Using Affine coord
   Int dy;
+  Int dx;
   Int rx;
+  Int ry;
   Int _s;
   Int _p;
 
-  for (int g = 0; g < CPU_GRP_SIZE; g++) {
-    uint16_t k = x[g].i16[i] & colMask;
-    Int *p2x = &PUBX(i,k);
-    dx[g].ModSub(p2x,&p1[g].x);
-  }
-  grp->Set(dx);
-  grp->ModInv();
+  uint64_t nbStep = 0;
+  hash160_t *x = params->x;
+  hash160_t *y = params->y;
+  hash160_t *hStart = params->hStart;
+  hash160_t *hStop = params->hStop;
 
-  for (int g = 0; g < CPU_GRP_SIZE; g++) {
-    uint16_t k = x[g].i16[i] & colMask;
-    Int *p2x = &PUBX(i, k);
-    Int *p2y = &PUBY(i, k);
-    dy.ModSub(p2y, &p1[g].y);
-    _s.ModMulK1(&dy, &dx[g]);
-    _p.ModSquareK1(&_s);
-
-    rx.ModSub(&_p, &p1[g].x);
-    rx.ModSub(p2x);
-
-    p1[g].y.ModSub(p2x, &rx);
-    p1[g].y.ModMulK1(&_s);
-    p1[g].y.ModSub(p2y);
-    p1[g].x.Set(&rx);
-  }
-
-}
-
-// ----------------------------------------------------------------------------
-
-void BTCCollider::FGroup(IntGroup *grp, Point *pts, Int *di, hash160_t *x) {
-
-  // Perform x = F(x) for a group
-
-  for (int g = 0; g < CPU_GRP_SIZE; g++) {
-    pts[g].x.Set(&PUBX(0, x[g].i16[0]));
-    pts[g].y.Set(&PUBY(0, x[g].i16[0]));
-#ifndef CPU_AFFINE
-    pts[g].z.SetInt32(1);
-#endif
-  }
-
-#ifdef CPU_AFFINE
-
-  // Affine coordinates
-  int i;
-  for (i = 1; i < nbFull; i++)
-    AddGroup(grp, x, pts, di, i, 0xFFFF);
-  
-  if (colMask)
-    AddGroup(grp, x, pts, di, i, colMask);
-
-#else
-
-  // Projective coordinates
-
-  for (int g = 0; g < CPU_GRP_SIZE; g++) {
-    int i;
-    for (i = 1; i < nbFull; i++)
-      pts[g] = Add(pts[g], i,x[g].i16[i]);
-    if (colMask)
-      pts[g] = Add(pts[g], i,x[g].i16[i] & colMask);
-    di[g].Set(&pts[g].z);
-  }
-  grp->Set(di);
-  grp->ModInv();
-  for (int g = 0; g < CPU_GRP_SIZE; g++) {
-    pts[g].x.ModMulK1(&di[g]);
-    pts[g].y.ModMulK1(&di[g]);
-  }
-
-#endif
-
-  for (int g = 0; g < CPU_GRP_SIZE; g += 4) {
-
-    bool o0 = pts[g + 0].y.IsOdd();
-    bool o1 = pts[g + 1].y.IsOdd();
-    bool o2 = pts[g + 2].y.IsOdd();
-    bool o3 = pts[g + 3].y.IsOdd();
-
-    secp->GetCompressedHash160(P2PKH,
-      &pts[g + 0].x, &pts[g + 1].x, &pts[g + 2].x, &pts[g + 3].x,
-      o0, o1, o2, o3,
-      x[g].i8, x[g + 1].i8, x[g + 2].i8, x[g + 3].i8);
-  
-  }
-
-  if (extraPoints) {
-
-    Int xe1;
-    Int xe2;
-    int hOk=0;
-
-    for (int g = 0; g < CPU_GRP_SIZE; g++) {
-
-      bool yOdd = pts[g].y.IsOdd();
-
-      if (!HASHOK(x[g]))
-        secp->GetCompressedHash160(P2PKH, &pts[g].x, !yOdd, x[g].i8);
-      else continue;
-
-      if (!HASHOK(x[g])) {
-        xe1.ModMulK1(&pts[g].x, &beta1);
-        secp->GetCompressedHash160(P2PKH, &xe1, yOdd, x[g].i8);
-      } else continue;
-
-      if (!HASHOK(x[g])) {
-        secp->GetCompressedHash160(P2PKH, &xe1, !yOdd, x[g].i8);
+  while (params->isRunning) {
+    // Random walk
+    for (int j = 0; j < 1024 * 16 && params->isRunning; j++) {
+      for (int i = 0; i < params->nbWalk; i++) {
+        hStart[i] = x[i];
+        hStop[i] = y[i];
       }
 
-      if (!HASHOK(x[g])) {
-        xe2.ModMulK1(&pts[g].x, &beta2);
-        secp->GetCompressedHash160(P2PKH, &xe2, yOdd, x[g].i8);
-      } else continue;
+      FGroup(grp, pts, dInv, x);
 
-      if (!HASHOK(x[g])) {
-        secp->GetCompressedHash160(P2PKH, &xe2, !yOdd, x[g].i8);
-      } else continue;
+      for (int i = 0; i < params->nbWalk; i++) {
+        x[i] = F(x[i]);
+        y[i] = F(F(y[i]));
+      }
 
+      nbStep++;
+      counters[thl] += params->nbWalk;
     }
 
+    // Check collision
+    if (params->isRunning) {
+      for (int i = 0; i < params->nbWalk; i++) {
+        if (hashTable.compareHash(&x[i], &y[i]) == 0) {
+          // Collision
+          Lock();
+          vector<Int> col = hashTable.GetCollision(&x[i], &y[i]);
+          if (col.size() > 0) {
+            Int privKey = col[0];
+            Int privKey2 = col[1];
+            Point publicKey = secp->ComputePublicKey(&privKey);
+            Point publicKey2 = secp->ComputePublicKey(&privKey2);
+            printf("\nCollision found:\n");
+            printf("PrivKey1: %s\n", privKey.GetBase16().c_str());
+            printf("PrivKey2: %s\n", privKey2.GetBase16().c_str());
+            printf("PubKey1: %s\n", publicKey.GetBase16Compressed().c_str());
+            printf("PubKey2: %s\n", publicKey2.GetBase16Compressed().c_str());
+            FILE *f = fopen(outputFile.c_str(), "a");
+            if (f) {
+              fprintf(f, "PrivKey1: %s\n", privKey.GetBase16().c_str());
+              fprintf(f, "PrivKey2: %s\n", privKey2.GetBase16().c_str());
+              fprintf(f, "PubKey1: %s\n", publicKey.GetBase16Compressed().c_str());
+              fprintf(f, "PubKey2: %s\n", publicKey2.GetBase16Compressed().c_str());
+              fclose(f);
+            }
+          }
+          Unlock();
+        }
+      }
+    }
+
+    // Save hash
+    if (params->isRunning) {
+      Lock();
+      for (int i = 0; i < params->nbWalk; i++)
+        hashTable.AddHash(&hStart[i], &hStop[i]);
+      Unlock();
+    }
+
+    // Wait for save request
+    if (params->isRunning) {
+      while (saveRequest) {
+        Timer::SleepMillis(50);
+      }
+    }
   }
 
-
-}
-
-// ----------------------------------------------------------------------------
-
-Point BTCCollider::Add(Point &p1, int n, uint16_t h) {
-  
-  Int *p2x = &PUBX(n,h);
-  Int *p2y = &PUBY(n,h);
-
-  Int u;
-  Int v;
-  Int u1;
-  Int v1;
-  Int vs2;
-  Int vs3;
-  Int us2;
-  Int a;
-  Int us2w;
-  Int vs2v2;
-  Int vs3u2;
-  Int _2vs2v2;
-  Point r;
-
-  u1.ModMulK1(p2y, &p1.z);
-  v1.ModMulK1(p2x, &p1.z);
-  u.ModSub(&u1, &p1.y);
-  v.ModSub(&v1, &p1.x);
-  us2.ModSquareK1(&u);
-  vs2.ModSquareK1(&v);
-  vs3.ModMulK1(&vs2, &v);
-  us2w.ModMulK1(&us2, &p1.z);
-  vs2v2.ModMulK1(&vs2, &p1.x);
-  _2vs2v2.ModAdd(&vs2v2, &vs2v2);
-  a.ModSub(&us2w, &vs3);
-  a.ModSub(&_2vs2v2);
-
-  r.x.ModMulK1(&v, &a);
-
-  vs3u2.ModMulK1(&vs3, &p1.y);
-  r.y.ModSub(&vs2v2, &a);
-  r.y.ModMulK1(&r.y, &u);
-  r.y.ModSub(&vs3u2);
-
-  r.z.ModMulK1(&vs3, &p1.z);
-
-  return r;
-
+  delete grp;
+  delete[] pts;
+  delete[] dInv;
 }
 
 // ----------------------------------------------------------------------------
 
 hash160_t BTCCollider::F(hash160_t x) {
+  uint64_t *x64 = (uint64_t *)&x;
+  uint64_t *y64 = (uint64_t *)&x;
+  uint32_t *x32 = (uint32_t *)&x;
+  uint32_t *y32 = (uint32_t *)&x;
 
-  Point p;
-  p.x.Set(&PUBX(0,x.i16[0]));
-  p.y.Set(&PUBY(0,x.i16[0]));
-  p.z.SetInt32(1);
+  // Derived from pairgen (https://github.com/basil00/pairgen.git)
+  // Given a hash160 H comprised on {h0, h1, .., h9} 16-bit parts, then H is
+  // mapped to a public key P as follows:
+  //     P = pub[0][h0] + pub[1][h1] + .. + pub[9][h9]
+  // The calculation is truncated according to the length n.  The corresponding
+  // private key P' is:
+  //     P' = priv[0]+h0 + priv[1]+h1*2^16 + .. + priv[9]+h9*2^144
+  // Each base private key is chosen randomly and computed in advanced. 
 
-  int i;
-  for (i = 1; i < nbFull; i++)
-    p = Add(p, i,x.i16[i]);
+  Int px;
+  Int py;
+  Int dx;
+  Int dy;
+  Int rx;
+  Int ry;
+  Int _s;
+  Int _p;
 
-  if (colMask)
-    p = Add(p, i,x.i16[i] & colMask);
+  px.Set32Bytes((unsigned char *)&pub[0 * 131072 + x32[0] * 2]);
+  py.Set32Bytes((unsigned char *)&pub[0 * 131072 + x32[0] * 2 + 1]);
 
-  p.Reduce();
-  hash160_t ret;
-  secp->GetHash160(P2PKH,true,p,ret.i8);
-
-  if (extraPoints) {
-
-    bool yOdd = p.y.IsOdd();
-    Int xe1;
-    Int xe2;
-
-    if (!HASHOK(ret))
-      secp->GetCompressedHash160(P2PKH, &p.x, !yOdd, ret.i8);
-
-    if (!HASHOK(ret)) {
-      xe1.ModMulK1(&p.x, &beta1);
-      secp->GetCompressedHash160(P2PKH, &xe1, yOdd, ret.i8);
-    }
-
-    if (!HASHOK(ret)) {
-      secp->GetCompressedHash160(P2PKH, &xe1, !yOdd, ret.i8);
-    }
-
-    if (!HASHOK(ret)) {
-      xe2.ModMulK1(&p.x, &beta2);
-      secp->GetCompressedHash160(P2PKH, &xe2, yOdd, ret.i8);
-    }
-
-    if (!HASHOK(ret)) {
-      secp->GetCompressedHash160(P2PKH, &xe2, !yOdd, ret.i8);
-    }
-
+  for (int i = 1; i < 5; i++) {
+    dx.Set32Bytes((unsigned char *)&pub[i * 131072 + x32[i] * 2]);
+    dy.Set32Bytes((unsigned char *)&pub[i * 131072 + x32[i] * 2 + 1]);
+    secp->AddDirect(px, py, dx, dy);
   }
 
-  return ret;
+  // P = lambda1*(P + beta1.G)
+  secp->AddDirect(px, py, beta1);
+  secp->MulDirect(px, py, lambda1);
 
+  // P = P + beta2.G
+  secp->AddDirect(px, py, beta2);
+
+  // P = lambda2*P
+  secp->MulDirect(px, py, lambda2);
+
+  px.Get32Bytes((unsigned char *)y64);
+  py.Get32Bytes((unsigned char *)(y64 + 1));
+
+  return x;
 }
 
 // ----------------------------------------------------------------------------
 
-bool BTCCollider::IsDP(hash160_t x) {
+void BTCCollider::FGroup(IntGroup *grp, Point *pts, Int *dInv, hash160_t *x) {
+  uint64_t *x64 = (uint64_t *)x;
+  uint32_t *x32 = (uint32_t *)x;
 
-  return (x.i64[0] & dMask)==0;
+  Int px[CPU_GRP_SIZE];
+  Int py[CPU_GRP_SIZE];
+  Int dx[CPU_GRP_SIZE];
+  Int dy[CPU_GRP_SIZE];
 
-}
-
-bool BTCCollider::IsEqual(hash160_t x1, hash160_t x2) {
-
-  int i;
-
-  for (i = 0; i < nbFull; i++)
-    if(x1.i16[i]!=x2.i16[i])
-      return false;
-
-  if (colMask) {
-    if ((x1.i16[i] & colMask) != (x2.i16[i] & colMask))
-      return false;
+  for (int i = 0; i < CPU_GRP_SIZE; i++) {
+    px[i].Set32Bytes((unsigned char *)&pub[0 * 131072 + x32[i * 5] * 2]);
+    py[i].Set32Bytes((unsigned char *)&pub[0 * 131072 + x32[i * 5] * 2 + 1]);
   }
 
+  for (int j = 1; j < 5; j++) {
+    for (int i = 0; i < CPU_GRP_SIZE; i++) {
+      dx[i].Set32Bytes((unsigned char *)&pub[j * 131072 + x32[i * 5 + j] * 2]);
+      dy[i].Set32Bytes((unsigned char *)&pub[j * 131072 + x32[i * 5 + j] * 2 + 1]);
+    }
+    grp->AddDirect(px, py, dx, dy);
+  }
+
+  // P = lambda1*(P + beta1.G)
+  grp->AddDirect(px, py, beta1);
+  grp->MulDirect(px, py, lambda1);
+
+  // P = P + beta2.G
+  grp->AddDirect(px, py, beta2);
+
+  // P = lambda2*P
+  grp->MulDirect(px, py, lambda2);
+
+  for (int i = 0; i < CPU_GRP_SIZE; i++) {
+    px[i].Get32Bytes((unsigned char *)(x64 + i * 5));
+    py[i].Get32Bytes((unsigned char *)(x64 + i * 5 + 1));
+  }
+}
+
+// ----------------------------------------------------------------------------
+
+string BTCCollider::GetHex(hash160_t h) {
+  char tmp[41];
+  for (int i = 0; i < 20; i++)
+    sprintf(tmp + 2 * i, "%02X", (uint8_t)(h.i8[i]));
+  return string(tmp);
+}
+
+// ----------------------------------------------------------------------------
+
+bool BTCCollider::isAlive(TH_PARAM *params) {
+  for (int i = 0; i < nbThread; i++)
+    if (params[i].isRunning)
+      return true;
+  return false;
+}
+
+// ----------------------------------------------------------------------------
+
+bool BTCCollider::isReady(TH_PARAM *params) {
+  for (int i = 0; i < nbThread; i++)
+    if (!params[i].isReady)
+      return false;
   return true;
-
 }
 
 // ----------------------------------------------------------------------------
 
-#ifdef WIN64
-DWORD WINAPI _FindCollisionCPU(LPVOID lpParam) {
-#else
-void *_FindCollisionCPU(void *lpParam) {
-#endif
-  TH_PARAM *p = (TH_PARAM *)lpParam;
-  p->obj->FindCollisionCPU(p);
-  return 0;
-}
-
-#ifdef WIN64
-DWORD WINAPI _UndistinguishCPU(LPVOID lpParam) {
-#else
-void *_UndistinguishCPU(void *lpParam) {
-#endif
-  TH_PARAM *p = (TH_PARAM *)lpParam;
-  p->obj->UndistinguishCPU(p);
-  return 0;
-}
-
-#ifdef WIN64
-DWORD WINAPI _FindCollisionGPU(LPVOID lpParam) {
-#else
-void *_FindCollisionGPU(void *lpParam) {
-#endif
-  TH_PARAM *p = (TH_PARAM *)lpParam;
-  p->obj->FindCollisionGPU(p);
-  return 0;
+bool BTCCollider::isWaiting(TH_PARAM *params) {
+  for (int i = 0; i < nbThread; i++)
+    if (!params[i].isWaiting)
+      return false;
+  return true;
 }
 
 // ----------------------------------------------------------------------------
 
-void  BTCCollider::Lock() {
-
-#ifdef WIN64
-  WaitForSingleObject(ghMutex, INFINITE);
-#else
-  pthread_mutex_lock(&ghMutex);
-#endif
-
-}
-
-void  BTCCollider::Unlock() {
-
-#ifdef WIN64
-  ReleaseMutex(ghMutex);
-#else
-  pthread_mutex_unlock(&ghMutex);
-#endif
-
-}
-
-// ----------------------------------------------------------------------------
-
-void BTCCollider::UndistinguishCPU(TH_PARAM *ph) {
-
-  int thId = ph->threadId;
-  counters[thId] = 0;
-
-  hash160_t x = ph->start;
-
-  while (!endOfSearch) {
-
-    // Replay random walk
-    hash160_t y = F(x);
-    while (!endOfSearch && !IsDP(y)) {
-      y = F(y);
-      counters[thId]++;
-    }
-
-    Lock();
-
-    if (!endOfSearch) {
-
-      if (hashTable.AddHash(&x,&y)==COLLISION) {
-        // Collision found
-        endOfSearch = true;
-        //printf("C");
-      } else {
-        //printf(".");
-      }
-
-    }
-
-    Unlock();
-
-    if (IsEqual(y, ph->end)) {
-      // Reached end of cycle
-      //printf("S");
-      return;
-    }
-
-    x = y;
-
-  }
-
-}
-
-void BTCCollider::FindCollisionCPU(TH_PARAM *ph) {
-
-  int thId = ph->threadId;
-  counters[thId] = 0;
-
-  ph->hasStarted = true;
-
-  IntGroup *grp = new IntGroup(CPU_GRP_SIZE);
-  Point *pts = new Point[CPU_GRP_SIZE];
-  Int *dInv = new Int[CPU_GRP_SIZE];
-
-  while (!endOfSearch) {
-
-    // Random walk
-    FGroup(grp,pts,dInv,ph->y);
-
-    if (saveRequest) {
-      ph->isWaiting = true;
-      Lock();
-      ph->isWaiting = false;
-      Unlock();
-    }
-
-    if (!endOfSearch) {
-
-      counters[thId] += CPU_GRP_SIZE;
-
-      for (int g = 0; g < CPU_GRP_SIZE; g++) {
-        if (IsDP(ph->y[g])) {
-          Lock();
-          if (!endOfSearch) {
-            int cStatus = hashTable.AddHash(&ph->x[g], &ph->y[g]);
-            switch (cStatus) {
-            case COLLISION:
-              endOfSearch = true;
-              break;
-            case FALSE_COLLISION:
-              // Reset bad random walk
-              Rand(&ph->localSeed, &ph->y[g]);
-              break;
-            }
-          }
-          Unlock();
-          ph->x[g] = ph->y[g];
-        }
-      }
-
-    }
-
-  }
-
-  delete[] pts;
-  delete[] dInv;
-  delete grp;
-  ph->isRunning = false;
-
-}
-
-// ----------------------------------------------------------------------------
-
-
-void BTCCollider::FindCollisionGPU(TH_PARAM *ph) {
-
-  bool ok = true;
-
-#ifdef WITHGPU
-
-  int thId = ph->threadId;
-  counters[thId] = 0;
-
-  ph->gpu = new GPUEngine(ph->gridSizeX, ph->gridSizeY, ph->gpuId, 65536*2);
-  printf("GPU: %s (%.1f MB used)\n", ph->gpu->deviceName.c_str(), ph->gpu->GetMemory() / 1048576.0);
-
-  int nbH = ph->gpu->GetNbThread() * GPU_GRP_SIZE;
-
-  // Set up GPU
-  ph->gpu->SetExtraPoint(extraPoints);
-  ph->gpu->SetMasks(colMask, dMask, nbFull);
-  ph->gpu->SetKeys(pub);
-  if (!ph->gpu->SetStartingHashes((uint64_t *)ph->x,(uint64_t *)ph->y)) {
-    printf("SetStartingHashes failed !");
-    delete ph->gpu;
-    return;
-  }
-
-  ph->hasStarted = true;
-  vector<ITEM> hashFound;
-
-  while(!endOfSearch) {
-
-    ph->gpu->Launch(hashFound);
-    counters[thId] += nbH * NB_RUN;
-
-    if (saveRequest) {
-      // We need to retrieve hashes from device memory
-      if (!ph->gpu->GetHashes((uint64_t *)ph->x, (uint64_t *)ph->y))
-        printf("\nWarning, cannot retrieve GPU state !\n");
-      ph->isWaiting = true;
-      Lock();
-      ph->isWaiting = false;
-      Unlock();
-    }
-
-    if (hashFound.size() > 0) {
-      Lock();
-      for (int i = 0; !endOfSearch && i < (int)hashFound.size(); i++)
-        if (hashTable.AddHash((hash160_t *)(hashFound[i].h1), (hash160_t *)(hashFound[i].h2)) == COLLISION)
-          endOfSearch = true;
-        // TODO: Manage false collision
-      Unlock();
-    }
-
-  }
-
-#else
-  ph->hasStarted = true;
-  printf("GPU code not compiled, use -DWITHGPU when compiling.\n");
-#endif
-
-#ifdef WITHGPU
-  delete ph->gpu;
-#endif
-
-  ph->isRunning = false;
-
-}
-
-// ----------------------------------------------------------------------------
-
-bool BTCCollider::isAlive(TH_PARAM *p) {
-
-  bool isAlive = true;
-  int total = nbCPUThread + nbGPUThread;
-  for(int i=0;i<total;i++)
-    isAlive = isAlive && p[i].isRunning;
-
-  return isAlive;
-
-}
-
-// ----------------------------------------------------------------------------
-
-bool BTCCollider::hasStarted(TH_PARAM *p) {
-
-  bool hasStarted = true;
-  int total = nbCPUThread + nbGPUThread;
-  for (int i = 0; i < total; i++)
-    hasStarted = hasStarted && p[i].hasStarted;
-
-  return hasStarted;
-
-}
-
-// ----------------------------------------------------------------------------
-
-bool BTCCollider::isWaiting(TH_PARAM *p) {
-
-  bool isWaiting = true;
-  int total = nbCPUThread + nbGPUThread;
-  for (int i = 0; i < total; i++)
-    isWaiting = isWaiting && p[i].isWaiting;
-
-  return isWaiting;
-
-}
-
-// ----------------------------------------------------------------------------
-
-uint64_t BTCCollider::getGPUCount() {
-
+uint64_t BTCCollider::getGlobalCount() {
   uint64_t count = 0;
-  for(int i=0;i<nbGPUThread;i++)
-    count += counters[0x80L+i];
-  return count;
-
-}
-
-uint64_t BTCCollider::getCPUCount() {
-
-  uint64_t count = 0;
-  for(int i=0;i<nbCPUThread;i++)
+  for (int i = 0; i < nbThread; i++)
     count += counters[i];
   return count;
-
 }
 
 // ----------------------------------------------------------------------------
 
-string BTCCollider::GetTimeStr(double dTime) {
+void BTCCollider::SetupRanges(uint32_t totalThreads) {
+  // Set ranges
+  Int threads;
+  threads.SetInt32(totalThreads);
+  rangeDiff = secp->order.Div(&threads);
+  rangeStart.Set(&secp->order);
+  rangeStart.Sub(&rangeDiff);
+  rangeEnd.Set(&secp->order);
+  rangeStart.Add(1);
+}
 
-  char tmp[256];
+// ----------------------------------------------------------------------------
 
-  double nbDay = dTime / 86400.0;
-  if (nbDay >= 1) {
+void BTCCollider::getCPUStartingKey(int thId, Int *key) {
+  Int k(&rangeStart);
+  Int r;
+  r.Rand(&rangeStart, &rangeEnd);
+  k.Add(&r);
+  key->Set(&k);
+}
 
-    double nbYear = nbDay / 365.0;
-    if (nbYear > 1) {
-      if (nbYear < 5)
-        sprintf(tmp, "%.1fy", nbYear);
-      else
-        sprintf(tmp, "%gy", nbYear);
-    } else {
-      sprintf(tmp, "%.1fd", nbDay);
-    }
+// ----------------------------------------------------------------------------
 
-  } else {
+void BTCCollider::SetKeys(Point *p) {
+  // Set starting public key for each thread
+  IntGroup *grp = new IntGroup(CPU_GRP_SIZE);
+  Point *pts = new Point[CPU_GRP_SIZE];
+  Int *dx = new Int[CPU_GRP_SIZE];
+  Int *dy = new Int[CPU_GRP_SIZE];
 
-    int iTime = (int)dTime;
-    int nbHour = (int)((iTime % 86400) / 3600);
-    int nbMin = (int)(((iTime % 86400) % 3600) / 60);
-    int nbSec = (int)(iTime % 60);
-
-    if (nbHour == 0) {
-      if (nbMin == 0) {
-        sprintf(tmp, "%02ds", nbSec);
-      } else {
-        sprintf(tmp, "%02d:%02d", nbMin, nbSec);
-      }
-    } else {
-      sprintf(tmp, "%02d:%02d:%02d", nbHour, nbMin, nbSec);
-    }
-
+  for (int i = 0; i < nbThread; i++) {
+    Int pk;
+    getCPUStartingKey(i, &pk);
+    Point p = secp->ComputePublicKey(&pk);
+    startPubKey[i * 2] = p.x;
+    startPubKey[i * 2 + 1] = p.y;
   }
 
+  delete grp;
+  delete[] pts;
+  delete[] dx;
+  delete[] dy;
+}
+
+// ----------------------------------------------------------------------------
+
+string BTCCollider::GetTimeStr(double s) {
+  char tmp[256];
+  int d = (int)(s / 86400.0);
+  s -= d * 86400;
+  int h = (int)(s / 3600.0);
+  s -= h * 3600;
+  int m = (int)(s / 60.0);
+  s -= m * 60;
+  if (d > 0) sprintf(tmp, "%d Day %02d:%02d:%02.0f", d, h, m, s);
+  else sprintf(tmp, "%02d:%02d:%02.0f", h, m, s);
   return string(tmp);
-
 }
 
 // ----------------------------------------------------------------------------
 
-void BTCCollider::loadPuzzlePublicKeys(const std::string& filename) {
-    std::ifstream file(filename);
-    std::string line;
-    while (std::getline(file, line)) {
-        std::istringstream iss(line);
-        std::string pubkey;
-        int range;
-        if (std::getline(iss, pubkey, ',') && (iss >> range)) {
-            puzzlePublicKeys.push_back({pubkey, range});
-        }
-    }
+void BTCCollider::Rand(Int *seed, hash160_t *h) {
+  uint8_t tmp[32];
+  sha256((uint8_t *)seed->bits64, 32, tmp);
+  memcpy(h->i8, tmp, 20);
+  seed->SetInt32(0);
+  seed->Set32Bytes(tmp);
 }
 
 // ----------------------------------------------------------------------------
 
-void BTCCollider::searchRangeSpecific(const std::string& pubKey, int bitRange) {
-    // Implement range-specific search logic here
-    // This is where you'll use your GPU to search for collisions
-    // You'll need to adapt this to work with your existing GPU code
+void BTCCollider::Rand(Int *seed, Int *i) {
+  uint8_t tmp[32];
+  sha256((uint8_t *)seed->bits64, 32, tmp);
+  i->SetInt32(0);
+  i->Set32Bytes(tmp);
+  seed->SetInt32(0);
+  seed->Set32Bytes(tmp);
 }
 
 // ----------------------------------------------------------------------------
-
-void BTCCollider::Search(int nbThread,std::vector<int> gpuId,std::vector<int> gridSize) {
-
-  double t0;
-  double t1;
-  double lastSave = 0;
-  nbCPUThread = nbThread;
-  nbGPUThread = (useGpu?(int)gpuId.size():0);
-  saveRequest = false;
-
-  double avgI = sqrt(M_PI / 2.0)*pow(2.0, (double)colSize / 2.0);
-  if(extraPoints) avgI /= sqrt(2.0);
-
-  TH_PARAM *params = (TH_PARAM *)malloc((nbCPUThread + nbGPUThread) * sizeof(TH_PARAM));
-  THREAD_HANDLE *thHandles = (THREAD_HANDLE *)malloc((nbCPUThread + nbGPUThread) * sizeof(THREAD_HANDLE));
-
-#ifdef STATISTICS
-
-  uint64_t totalCount = 0;
-  int MAXTRY = 10000;
-  for (int Try = 1; Try <= MAXTRY; Try++) {
-
-    hashTable.Reset();
-#endif
-
-    endOfSearch = false;
-    memset(params, 0, (nbCPUThread + nbGPUThread) * sizeof(TH_PARAM));
-    memset(counters, 0, sizeof(counters));
-    printf("Number of CPU thread: %d\n", nbCPUThread);
-    uint64_t totalRW = nbCPUThread * CPU_GRP_SIZE;
-
-#ifdef WITHGPU
-
-    for (int i = 0; i < nbGPUThread; i++) {
-      int x = gridSize[2 * i];
-      int y = gridSize[2 * i + 1];
-      if (!GPUEngine::GetGridSize(gpuId[i], &x, &y)) {
-        return;
-      } else {
-        params[nbCPUThread + i].gridSizeX = x;
-        params[nbCPUThread + i].gridSizeY = y;
-      }
-      totalRW += GPU_GRP_SIZE * x*y;
-    }
-
-#endif
-
-    // Compute optimal distinguished bits number.
-    // If dp is too large comparing to the total number of parallel random walks
-    // an overload appears due to the fact that computed paths become too short
-    // and decrease significantly the probability that distiguised points collide 
-    // inside the centralized hash table.
-    int optimalDP = (int)((double)colSize / 2.0 - log2((double)totalRW) - 2);
-    if (optimalDP < 0) optimalDP = 0;
-    printf("Number of random walk: 2^%.2f (Max DP=%d)\n", log2((double)totalRW), optimalDP);
-
-    if (initDPSize > optimalDP) {
-      printf("Warning, DP is too large, it may cause significant overload.\n");
-      printf("Hint: decrease number of threads, gridSize, or decrese dp using -d.\n");
-    }
-    if (initDPSize < 0)
-      initDPSize = optimalDP;
-
-    SetDP(initDPSize);
 
 #ifdef WIN64
-    ghMutex = CreateMutex(NULL, FALSE, NULL);
+DWORD WINAPI _FindCollision(LPVOID lpParam) {
 #else
-    ghMutex = PTHREAD_MUTEX_INITIALIZER;
+void *_FindCollision(void *lpParam) {
 #endif
-
-    // Launch CPU threads
-    for (int i = 0; i < nbCPUThread; i++) {
-      params[i].threadId = i;
-      params[i].isRunning = true;
-      Rand(&seed, &params[i].localSeed);
-      params[i].nbWalk = CPU_GRP_SIZE;
-      params[i].x = (hash160_t *)malloc(params[i].nbWalk * sizeof(hash160_t));
-      params[i].y = (hash160_t *)malloc(params[i].nbWalk * sizeof(hash160_t));
-      FetchWalks(params[i].x, params[i].y, params[i].nbWalk);
-      thHandles[i] = LaunchThread(_FindCollisionCPU, params + i);
-      totalRW += CPU_GRP_SIZE;
-    }
-
-#ifdef WITHGPU
-    // Launch GPU threads
-    for (int i = 0; i < nbGPUThread; i++) {
-      int id = nbCPUThread + i;
-      params[id].threadId = 0x80L + i;
-      params[id].isRunning = true;
-      Rand(&seed, &params[id].localSeed);
-      params[id].gpuId = gpuId[i];
-      params[id].nbWalk = (uint64_t)params[id].gridSizeX * (uint64_t)params[id].gridSizeY * (uint64_t)GPU_GRP_SIZE;;
-      params[id].x = (hash160_t *)malloc(params[id].nbWalk * sizeof(hash160_t));
-      params[id].y = (hash160_t *)malloc(params[id].nbWalk * sizeof(hash160_t));
-      if (params[id].x == NULL || params[id].y == NULL) {
-        printf("Failed to allocate memory, decrease grid size !\n");
-        exit(-1);
-      }
-      FetchWalks(params[id].x, params[id].y, params[id].nbWalk);
-      thHandles[id] = LaunchThread(_FindCollisionGPU, params + id);
-    }
-#endif
-
-    if (fetchedWalk != nbLoadedWalk) {
-      printf("Warning, %.0f unhandled walks\n", (double)(nbLoadedWalk - fetchedWalk));
-    }
-
-#ifndef WIN64
-    setvbuf(stdout, NULL, _IONBF, 0);
-#endif
-
-    uint64_t lastCount = 0;
-    uint64_t gpuCount = 0;
-    uint64_t lastGPUCount = 0;
-
-    // Key rate smoothing filter
-#define FILTER_SIZE 8
-    double lastkeyRate[FILTER_SIZE];
-    double lastGpukeyRate[FILTER_SIZE];
-    uint32_t filterPos = 0;
-
-    double keyRate = 0.0;
-    double gpuKeyRate = 0.0;
-
-    memset(lastkeyRate, 0, sizeof(lastkeyRate));
-    memset(lastGpukeyRate, 0, sizeof(lastkeyRate));
-
-    // Wait that all threads have started
-    while (!hasStarted(params))
-      Timer::SleepMillis(50);
-
-    t0 = Timer::get_tick();
-    startTime = t0;
-
-    while (isAlive(params)) {
-
-      int delay = 2000;
-      while (isAlive(params) && delay > 0) {
-        Timer::SleepMillis(50);
-        delay -= 50;
-      }
-
-      gpuCount = getGPUCount();
-      uint64_t count = getCPUCount() + gpuCount;
-
-      t1 = Timer::get_tick();
-      keyRate = (double)(count - lastCount) / (t1 - t0);
-      gpuKeyRate = (double)(gpuCount - lastGPUCount) / (t1 - t0);
-      lastkeyRate[filterPos%FILTER_SIZE] = keyRate;
-      lastGpukeyRate[filterPos%FILTER_SIZE] = gpuKeyRate;
-      filterPos++;
-
-      // KeyRate smoothing
-      double avgKeyRate = 0.0;
-      double avgGpuKeyRate = 0.0;
-      uint32_t nbSample;
-      for (nbSample = 0; (nbSample < FILTER_SIZE) && (nbSample < filterPos); nbSample++) {
-        avgKeyRate += lastkeyRate[nbSample];
-        avgGpuKeyRate += lastGpukeyRate[nbSample];
-      }
-      avgKeyRate /= (double)(nbSample);
-      avgGpuKeyRate /= (double)(nbSample);
-
-      if (isAlive(params)) {
-
-        double P = avgKeyRate * (t1 - startTime + offsetTime) / avgI;
-
-        printf("\r[%.2f Mips][GPU %.2f Mips][Cnt 2^%.2f][%s %.1fMB][Avg %s %.1fMB]  ",
-          avgKeyRate / 1000000.0, avgGpuKeyRate / 1000000.0,
-          log2((double)count+offsetCount),
-          GetTimeStr(t1 - startTime + offsetTime).c_str(),
-          hashTable.GetSizeMB(),
-          GetTimeStr(avgI / avgKeyRate).c_str(),
-          hashTable.GetSizeMB()/P 
-          );
-
-      }
-
-      if (workFile.length() > 0) {
-        if ((t1- lastSave) > saveWorkPeriod) {
-          SaveWork(count + offsetCount, t1 - startTime + offsetTime, params, nbCPUThread + nbGPUThread);
-          lastSave = t1;
-        }
-      }
-
-      lastCount = count;
-      lastGPUCount = gpuCount;
-      t0 = t1;
-
-    }
-
-    JoinThreads(thHandles, nbCPUThread + nbGPUThread);
-    FreeHandles(thHandles, nbCPUThread + nbGPUThread);
-    for (int i = 0; i < nbCPUThread + nbGPUThread; i++) {
-      free(params[i].x);
-      free(params[i].y);
-    }
-
-    printf("\n");
-
-    if (dpSize > 0) {
-
-      // Undistinguish
-      printf("Undistinguishing\n");
-      do {
-
-        hash160_t a;
-        hash160_t b;
-        hash160_t e;
-        hashTable.getCollision(&a, &b, &e);
-        hashTable.Reset();
-        SetDP(dpSize / 2);
-        TH_PARAM p1;
-        TH_PARAM p2;
-        p1.start = a;
-        p1.end = e;
-        p1.threadId = 0;
-        p2.start = b;
-        p2.end = e;
-        p2.threadId = 1;
-        THREAD_HANDLE th[2];
-        endOfSearch = false;
-        //printf("A=%s\n", GetHex(a).c_str());
-        //printf("B=%s\n", GetHex(b).c_str());
-        //printf("E=%s\n", GetHex(e).c_str());
-        th[0] = LaunchThread(_UndistinguishCPU, &p1);
-        th[1] = LaunchThread(_UndistinguishCPU, &p2);
-        JoinThreads(th, 2);
-        FreeHandles(th, 2);
-        //printf("\n");
-
-      } while (dpSize != 0);
-
-    }
-
-    hash160_t a;
-    hash160_t b;
-    hashTable.getCollision(&a, &b, NULL);
-
-    Int k1 = GetPrivKey(a);
-    Int k2 = GetPrivKey(b);
-    Point p1 = secp->ComputePublicKey(&k1);
-    Point p2 = secp->ComputePublicKey(&k2);
-    hash160_t h1;
-    hash160_t h2;
-    secp->GetHash160(P2PKH, true, p1, h1.i8);
-    secp->GetHash160(P2PKH, true, p2, h2.i8);
-
-    double totalTime = Timer::get_tick() - startTime + offsetTime;
-
-    printf("[Collision Found: %d bits][Cnt 2^%.2f][T %s]\n",
-      hashTable.getCollisionSize(&h1, &h2),
-      log2((double)lastCount+offsetCount),
-      GetTimeStr(totalTime).c_str());
-
-    FILE *f = stdout;
-    bool needToClose = false;
-
-    if (outputFile.length() > 0) {
-      f = fopen(outputFile.c_str(), "w");
-      if (f == NULL) {
-        printf("Cannot open %s for writing\n", outputFile.c_str());
-        f = stdout;
-      } else
-        needToClose = true;
-    }
-
-    fprintf(f,"H1=%s\n", GetHex(h1).c_str());
-    fprintf(f,"H2=%s\n", GetHex(h2).c_str());
-    fprintf(f,"Priv (WIF): p2pkh:%s\n", secp->GetPrivAddress(true, k1).c_str());
-    fprintf(f,"Priv (WIF): p2pkh:%s\n", secp->GetPrivAddress(true, k2).c_str());
-    fprintf(f,"Add1: %s\n", secp->GetAddress(P2PKH, true, h1.i8).c_str());
-    fprintf(f,"Add2: %s\n", secp->GetAddress(P2PKH, true, h2.i8).c_str());
-
-    if(needToClose)
-      fclose(f);
-
-#ifdef STATISTICS
-
-    totalCount += lastCount;
-    double avg = (double)totalCount / (double)(Try);
-    printf("[Try %d][Avg %.4f][Gain %.2f]\n",Try,log2(avg),avgI/avg);
-
-  }
-
-#endif
-
+  TH_PARAM *p = (TH_PARAM *)lpParam;
+  p->obj->FindCollision(p);
+  p->isRunning = false;
+  return 0;
 }
 
 // ----------------------------------------------------------------------------
 
-string BTCCollider::GetHex(hash160_t x) {
-
-  string ret;
-
-  char tmp[128];
-  for (int i = 0; i < 20; i++) {
-    sprintf(tmp,"%02X",x.i8[i]);
-    ret.append(tmp);
-  }
-
-  return ret;
-
+BTCCollider::~BTCCollider() {
+  if (pub) free(pub);
+  if (loadedX) free(loadedX);
+  if (loadedY) free(loadedY);
 }
