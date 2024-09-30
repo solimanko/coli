@@ -93,6 +93,9 @@ private:
   void Unlock();
   void SaveWork(uint64_t totalCount,double totalTime,TH_PARAM *threads,int nbThread);
   void LoadWork(std::string fileName);
+  void loadPuzzlePublicKeys(const std::string& filename);
+  void searchRangeSpecific(const std::string& pubKey, int bitRange);
+  std::vector<std::pair<std::string, int>> puzzlePublicKeys;
   std::string GetTimeStr(double s);
   Point Add(Point &p1, int n, uint16_t h);
 
