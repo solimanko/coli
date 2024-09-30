@@ -16,6 +16,9 @@
 */
 
 #include "BTCCollider.h"
+#include <fstream>
+#include <sstream>
+#include <iostream>
 #include "Base58.h"
 #include "Bech32.h"
 #include "hash/sha256.h"
@@ -46,7 +49,7 @@ void *_InitKey(void *lpParam) {
 // ----------------------------------------------------------------------------
 
 BTCCollider::BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string outputFile, std::string workFile, 
-                         std::string iWorkFile, uint32_t savePeriod, uint32_t n, int dp,bool extraPoints) {
+                         std::string iWorkFile, uint32_t savePeriod, uint32_t n, int dp, bool extraPoints) {
 
   this->secp = secp;
   this->useGpu = useGpu;
@@ -459,6 +462,47 @@ void BTCCollider::InitKey(TH_PARAM *p) {
     priv[id][j].Set(&k);
   }
 
+}
+
+// ----------------------------------------------------------------------------
+
+    loadPuzzlePublicKeys("puzzle_pubkeys.txt");
+}
+
+void BTCCollider::loadPuzzlePublicKeys(const std::string& filename) {
+    std::ifstream file(filename);
+    std::string line;
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string pubkey;
+        int range;
+        if (std::getline(iss, pubkey, ',') && (iss >> range)) {
+            puzzlePublicKeys.push_back({pubkey, range});
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+void BTCCollider::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSize) {
+    initializeSearch();
+    runSearch();
+    finalizeSearch();
+}
+
+// ----------------------------------------------------------------------------
+
+void BTCCollider::initializeSearch() {
+    // Initialize search parameters, allocate resources, etc.
+    // ... (implement initialization logic)
+}
+
+// ----------------------------------------------------------------------------
+
+void BTCCollider::runSearch() {
+    for (const auto& puzzle : puzzlePublicKeys) {
+        searchRangeSpecific(puzzle);
+    }
 }
 
 // ----------------------------------------------------------------------------
