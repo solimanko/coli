@@ -24,6 +24,7 @@
 #include "HashTable.h"
 #include "IntGroup.h"
 #include "GPU/GPUEngine.h"
+
 #ifdef WIN64
 #include <Windows.h>
 #endif
@@ -31,7 +32,6 @@
 class BTCCollider;
 
 typedef struct {
-
   BTCCollider *obj;
   int  threadId;
   bool isRunning;
@@ -43,14 +43,12 @@ typedef struct {
   uint64_t nbWalk;
   hash160_t *x;  // Starting path item
   hash160_t *y;  // Current path item
-
 #ifdef WITHGPU
   int  gridSizeX;
   int  gridSizeY;
   int  gpuId;
   GPUEngine *gpu;
 #endif
-
 } TH_PARAM;
 
 #ifdef WIN64
@@ -68,21 +66,16 @@ typedef pthread_t THREAD_HANDLE;
 
 class BTCCollider {
 
-struct PuzzlePublicKey {
-    std::string publicKey;
-    int bitRange;
-};
-
 public:
-
-  BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string outputFile, std::string workFile, 
-              std::string iWorkFile, uint32_t savePeriod, uint32_t n, int dp,bool extraPoints);
-
+  BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string outputFile, std::string workFile, std::string iWorkFile, uint32_t savePeriod, uint32_t n,int dp,bool extraPoint);
   void Search(int nbThread,std::vector<int> gpuId,std::vector<int> gridSize);
-  void Check(std::vector<int> gpuId,std::vector<int> gridSize);
+  void Check(std::vector<int> gpuId, std::vector<int> gridSize);
+  void FindCollisionCPU(TH_PARAM *p);
+  void FindCollisionGPU(TH_PARAM *p);
+  void UndistinguishCPU(TH_PARAM *p);
+  void InitKey(TH_PARAM *p);
 
 private:
-
   Int GetPrivKey(hash160_t x);
   hash160_t F(hash160_t x);
   bool IsDP(hash160_t x);
@@ -94,12 +87,8 @@ private:
   void Unlock();
   void SaveWork(uint64_t totalCount,double totalTime,TH_PARAM *threads,int nbThread);
   void LoadWork(std::string fileName);
-  void loadPuzzlePublicKeys(const std::string& filename);
-  void searchRangeSpecific(const std::string& pubKey, int bitRange);
-  std::vector<std::pair<std::string, int>> puzzlePublicKeys;
   std::string GetTimeStr(double s);
   Point Add(Point &p1, int n, uint16_t h);
-
 #ifdef WIN64
   THREAD_HANDLE LaunchThread(LPTHREAD_START_ROUTINE func,TH_PARAM *p);
 #else
@@ -107,7 +96,6 @@ private:
 #endif
   void JoinThreads(THREAD_HANDLE *handles, int nbThread);
   void FreeHandles(THREAD_HANDLE *handles, int nbThread);
-
   std::string GetHex(hash160_t x);
   void Rand(Int *seed,Int *i);
   void Rand(Int *seed,hash160_t *i);
@@ -117,6 +105,10 @@ private:
   bool hasStarted(TH_PARAM *p);
   bool isWaiting(TH_PARAM *p);
   void FetchWalks(hash160_t *x,hash160_t *y, uint64_t nbWalk);
+
+  // New methods for puzzle public keys
+  void loadPuzzlePublicKeys(const std::string& filename);
+  void searchRangeSpecific(const std::string& pubKey, int bitRange);
 
   std::string initialSeed;
   Int seed;
@@ -147,7 +139,6 @@ private:
   Int lambda2;
   Int beta1;
   Int beta2;
-
   uint64_t nbLoadedWalk;
   uint64_t fetchedWalk;
   hash160_t *loadedX;
@@ -159,16 +150,14 @@ private:
   Int   *pub;
   Int   priv[10][65536];
 
+  // New member for puzzle public keys
+  std::vector<std::pair<std::string, int>> puzzlePublicKeys;
+
 #ifdef WIN64
   HANDLE ghMutex;
 #else
   pthread_mutex_t  ghMutex;
 #endif
-
-  void loadPuzzlePublicKeys(const std::string& filename);
-  void searchRangeSpecific(const std::string& pubKey, int bitRange);
-  std::vector<std::pair<std::string, int>> puzzlePublicKeys;
-
 };
 
-#endif // BTCCOLLIDER_H
+#endif // BTCCOLLIDERH
