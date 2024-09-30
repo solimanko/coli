@@ -1,5 +1,5 @@
 /*
- * This file is part of the BTCCollider distribution (https://github.com/JeanLucPons/BTCCollider).
+ * This file is part of the BTCCollider distribution (https://github.com/solimanko/coli).
  * Copyright (c) 2020 Jean Luc PONS.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 #include "hash/sha512.h"
 #include "hash/sha256.h"
 
-#define RELEASE "1.1"
+#define RELEASE "1.2"
 
 using namespace std;
 
