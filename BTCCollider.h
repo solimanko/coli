@@ -73,12 +73,13 @@ struct PuzzlePublicKey {
     int bitRange;
 };
 
-class BTCCollider {
 public:
-    BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string outputFile, std::string workFile, 
-                std::string iWorkFile, uint32_t savePeriod, uint32_t n, int dp, bool extraPoints);
-    void Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSize);
-    void Check(std::vector<int> gpuId, std::vector<int> gridSize);
+
+  BTCCollider(Secp256K1 *secp, bool useGpu, bool stop, std::string outputFile, std::string workFile, 
+              std::string iWorkFile, uint32_t savePeriod, uint32_t n, int dp,bool extraPoints);
+
+  void Search(int nbThread,std::vector<int> gpuId,std::vector<int> gridSize);
+  void Check(std::vector<int> gpuId,std::vector<int> gridSize);
 
 private:
 
@@ -164,13 +165,10 @@ private:
   pthread_mutex_t  ghMutex;
 #endif
 
-    void loadPuzzlePublicKeys(const std::string& filename);
-    void searchRangeSpecific(const PuzzlePublicKey& puzzle);
-    void initializeSearch();
-    void runSearch();
-    void finalizeSearch();
+  void loadPuzzlePublicKeys(const std::string& filename);
+  void searchRangeSpecific(const std::string& pubKey, int bitRange);
+  std::vector<std::pair<std::string, int>> puzzlePublicKeys;
 
-    std::vector<PuzzlePublicKey> puzzlePublicKeys;
 };
 
 #endif // BTCCOLLIDER_H
